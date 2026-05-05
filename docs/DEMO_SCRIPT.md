@@ -35,9 +35,17 @@ Before running the demo:
 - No `.assistant_instructions.md` file
 - No MCP connections enabled in Genie Code
 
-### Prompts
+### Where to run the prompts
 
-Open Genie Code in Agent mode inside a pipeline and run these prompts:
+Every stage of this demo runs from the **SDP Pipelines UI** -- never the SQL editor or a notebook. Set up once and reuse for Stages 2-5:
+
+1. Workspace UI → **Pipelines** → open (or create) an empty SDP pipeline targeting `{catalog}.{schema}`.
+2. Inside the pipeline editor, open **Genie Code** in **Agent mode**.
+3. Start a **new conversation** for each stage so context (and any cached skills/instructions) is fresh.
+
+After each prompt, hit **Validate** (or **Run**) on the pipeline so the audience sees the table populate live in `{catalog}.{schema}`.
+
+### Prompts
 
 **Prompt 1a:**
 
@@ -105,7 +113,7 @@ Or upload to user level at `/Users/{username}/.assistant/skills/` for a personal
 
 ### Prompts
 
-Start a **new** Genie Code session (to clear context from Stage 1):
+Stay in the **same SDP pipeline** from Stage 1, but start a **new Genie Code Agent-mode conversation** so the freshly uploaded skills are picked up cleanly.
 
 **Prompt 2a:**
 
@@ -157,7 +165,7 @@ Keep the skills from Stage 2 in place. Add a user-level instructions file:
 
 ### Prompts
 
-Start a **new** Genie Code session:
+Stay in the **same SDP pipeline**, but start a **new Genie Code Agent-mode conversation** so the new instructions file is loaded.
 
 **Prompt 3a:**
 
@@ -219,7 +227,7 @@ DROP TABLE IF EXISTS {catalog}.{schema}.silver_accounts;
 
 ### Prompts
 
-Start a **new** Genie Code session:
+Stay in the **same SDP pipeline**, but start a **new Genie Code Agent-mode conversation**. With local skills now removed, you should be able to watch Genie Code call `get_file_contents` against the GitHub MCP server in the tool log.
 
 **Prompt 4a:**
 
@@ -244,14 +252,98 @@ Start a **new** Genie Code session:
 
 ---
 
+## Stage 5: DSML on Bakehouse (AI Functions)
+
+**Goal:** Show that the same skills+MCP setup extends to a new domain (DSML) with a new skill (`@sentiment-analysis`) and a new dataset (Marketplace-sourced AI/BI Bakehouse). Same governance, new capabilities.
+
+### Setup
+
+1. **Install the AI/BI Bakehouse Marketplace share + mirror tables into the demo catalog.** From the repo root:
+
+```bash
+cp marketplace_data/bakehouse_config.example.yaml local_deployment/bakehouse_config.yaml
+# Edit local_deployment/bakehouse_config.yaml -- set workspace_host, profile,
+# scratch_catalog_name (per-user scratch), demo_catalog (your existing demo
+# catalog), and demo_schema (default: bakehouse).
+
+databricks bundle deploy --profile <your-cli-profile>
+databricks bundle run install_bakehouse --profile <your-cli-profile>
+```
+
+The notebook does two things: (a) installs the Marketplace share into `scratch_catalog_name` (skipped if it already exists) and (b) CTAS-mirrors `customer_reviews`, `franchises`, `transactions`, and `customers` into `<demo_catalog>.<demo_schema>`. Re-runs are safe -- mirror tables use `CREATE OR REPLACE TABLE`.
+
+2. **Verify the mirrored tables are visible:**
+
+```sql
+SHOW TABLES IN {catalog}.bakehouse;
+SELECT COUNT(*) FROM {catalog}.bakehouse.customer_reviews;
+```
+
+3. Keep the **MCP connection** and **MCP-flavored instructions** from Stage 4. The new skill is auto-served by MCP because it lives in the same repo at `skills/dsml/sentiment-analysis.md`.
+
+### Prompts
+
+Stay in the **same SDP pipeline** from Stages 1-4, but start a **new Genie Code Agent-mode conversation** so MCP fetches the new `sentiment-analysis` skill cleanly. You don't need to `@mention` any skills -- the Stage 4 user-level instructions already tell Genie Code to fetch governance + sentiment-analysis from MCP whenever the prompt fits.
+
+Run these one at a time, hitting **Validate** (or **Run**) on the pipeline after each one so the audience sees the bronze → silver → gold tables materialize.
+
+**Prompt 5a (bronze):**
+
+> Build me a bronze table from `{catalog}.bakehouse.customer_reviews` as source.
+
+**Prompt 5b (silver):**
+
+> Build me a silver table from the bronze reviews that adds sentiment, topic, and extracted entities using AI functions.
+
+**Prompt 5c (gold):**
+
+> Build me a gold table that aggregates sentiment by franchise -- join `{catalog}.bakehouse.franchises` to add the franchise name, and show positive and negative review percentages by topic.
+
+After each prompt, hit **Validate** (or **Run**) on the pipeline so you can show the resulting table populated in `{catalog}.{schema}` while the audience watches.
+
+### What to observe
+
+- [x] Genie Code fetches `skills/dsml/sentiment-analysis.md` via MCP alongside the data-eng skills
+- [x] Bronze contains **no AI calls** -- raw passthrough only
+- [x] Silver is a `MATERIALIZED VIEW` (not `VIEW`) so AI functions run only on refresh
+- [x] AI calls are gated behind a non-empty / minimum-length check (`LENGTH(TRIM(review_text)) >= 5`)
+- [x] `CONSTRAINT` clauses pin `sentiment_label` to `{positive, negative, neutral, mixed}` and `topic_label` to the project taxonomy
+- [x] `data_quality_flag` distinguishes `MISSING_TEXT` vs `AI_NULL_RESPONSE` vs `CLEAN`
+- [x] Gold contains **aggregates only** -- no `source_text`, no AI calls
+- [x] All Stage 2-4 standards still apply: layer prefixes, audit columns, TBLPROPERTIES, UC tags
+- [x] PII guidance applied to `review_text` and any `extracted_entities.staff_name`
+
+> **Talking point:** "The skill abstraction scales. Adding a new domain (DSML) with new tooling (AI functions) and a new dataset (Marketplace) didn't change the demo flow -- one new skill file, one new instruction row, and Genie Code is governed across data engineering and AI."
+
+### Cleanup after Stage 5
+
+```sql
+DROP TABLE IF EXISTS {catalog}.{schema}.bronze_reviews;
+DROP TABLE IF EXISTS {catalog}.{schema}.silver_review_sentiment;
+DROP TABLE IF EXISTS {catalog}.{schema}.gold_review_sentiment_by_franchise;
+```
+
+In the pipeline UI, delete the `.sql` files generated by Genie Code in Stage 5.
+
+The mirrored Bakehouse tables in `{catalog}.bakehouse.*` and the Marketplace scratch catalog can stay -- they are read-only and re-runnable for future demos. To remove them:
+
+```sql
+DROP SCHEMA IF EXISTS {catalog}.bakehouse CASCADE;
+-- And, if you want to fully remove the Marketplace share:
+-- DROP CATALOG IF EXISTS <scratch_catalog_name> CASCADE;
+```
+
+---
+
 ## Summary Slide
 
-| Stage | Skills | Instructions | MCP | Result |
-|-------|--------|-------------|-----|--------|
-| 1. Baseline | -- | -- | -- | Functional but ungoverned code |
-| 2. Skills | Workspace | -- | -- | Governed code (manual `@skill` invocation) |
-| 3. Skills + Instructions | Workspace | User-level | -- | Governed code (automatic, no `@` needed) |
-| 4. MCP | GitHub | User-level (MCP) | GitHub MCP | Governed code (centralized, version-controlled) |
+| Stage | Skills | Instructions | MCP | Dataset | Result |
+|-------|--------|-------------|-----|---------|--------|
+| 1. Baseline | -- | -- | -- | Synthetic financial | Functional but ungoverned code |
+| 2. Skills | Workspace | -- | -- | Synthetic financial | Governed code (manual `@skill` invocation) |
+| 3. Skills + Instructions | Workspace | User-level | -- | Synthetic financial | Governed code (automatic, no `@` needed) |
+| 4. MCP | GitHub | User-level (MCP) | GitHub MCP | Synthetic financial | Governed code (centralized, version-controlled) |
+| 5. DSML on Bakehouse | GitHub (`+sentiment-analysis`) | User-level (MCP) | GitHub MCP | AI/BI Bakehouse (Marketplace) | Governed AI-function pipeline (new domain, same flow) |
 
 ---
 
@@ -270,6 +362,13 @@ DROP TABLE IF EXISTS {catalog}.{schema}.silver_accounts;
 DROP TABLE IF EXISTS {catalog}.{schema}.bronze_products;
 DROP TABLE IF EXISTS {catalog}.{schema}.silver_products;
 DROP TABLE IF EXISTS {catalog}.{schema}.gold_account_summary;
+-- Stage 5 (DSML on Bakehouse)
+DROP TABLE IF EXISTS {catalog}.{schema}.bronze_reviews;
+DROP TABLE IF EXISTS {catalog}.{schema}.silver_review_sentiment;
+DROP TABLE IF EXISTS {catalog}.{schema}.gold_review_sentiment_by_franchise;
+-- Optional: drop the mirrored Bakehouse data and the scratch Marketplace catalog
+-- DROP SCHEMA IF EXISTS {catalog}.bakehouse CASCADE;
+-- DROP CATALOG IF EXISTS <scratch_catalog_name> CASCADE;
 -- Also check for any variant names Genie Code may have used
 ```
 
