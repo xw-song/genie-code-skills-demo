@@ -92,18 +92,21 @@ branch_suffixes = ["Main Street", "Central", "Business Park", "Mall", "Station"]
 
 branch_gen = (
     dg.DataGenerator(spark, name="branches", rows=200, partitions=4)
-    .withColumn("branch_id", StringType(), template=r"BR\d\d\d\d\d")
+    .withColumn("branch_id", StringType(),
+                expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))")
     .withColumn("branch_name", StringType(), values=branch_suffixes)
     .withColumn("branch_type", StringType(),
-                values=["Full Service", "Express", "Digital Hub", "Business Center", "Premium"],
-                weights=[0.40, 0.25, 0.15, 0.10, 0.10])
+                values=["Full Service", "Express", "Digital Hub", "Business Center", "Premium"])
     .withColumn("city", StringType(), values=cities)
     .withColumn("region", StringType(),
                 values=["North", "South", "East", "West", "Central", "Metro", "Pacific", "Mountain", "Midwest"])
     .withColumn("country", StringType(), values=["United States"])
-    .withColumn("postal_code", StringType(), template=r"\d\d\d\d\d")
-    .withColumn("phone", StringType(), template=r"+1 \d\d\d-\d\d\d-\d\d\d\d")
-    .withColumn("manager_name", StringType(), template=r"\w+ \w+")
+    .withColumn("postal_code", StringType(),
+                expr="lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0')")
+    .withColumn("phone", StringType(),
+                expr="concat('+1 ', lpad(cast(cast(floor(rand()*900+100) as int) as string),3,'0'), '-', lpad(cast(cast(floor(rand()*900+100) as int) as string),3,'0'), '-', lpad(cast(cast(floor(rand()*10000) as int) as string),4,'0'))")
+    .withColumn("manager_name", StringType(),
+                expr="concat(element_at(array('James','Mary','John','Patricia','Robert','Linda','Michael','Barbara'), cast(floor(rand()*8)+1 as int)), ' ', element_at(array('Smith','Johnson','Williams','Brown','Jones','Garcia','Miller','Davis'), cast(floor(rand()*8)+1 as int)))")
     .withColumn("num_employees", IntegerType(), minValue=5, maxValue=50)
     .withColumn("opened_date", DateType(),
                 expr="date_add(to_date('2000-01-01'), cast(rand()*8000 as int))")
@@ -111,8 +114,7 @@ branch_gen = (
     .withColumn("has_safe_deposit", StringType(), values=["Y", "N"])
     .withColumn("has_business_services", StringType(), values=["Y", "N"])
     .withColumn("status", StringType(),
-                values=["Active", "Inactive", "Renovation"],
-                weights=[0.95, 0.03, 0.02])
+                values=["Active", "Inactive", "Renovation"])
 )
 
 branches_df = branch_gen.build()
@@ -143,7 +145,8 @@ categories_map = (
 
 product_gen = (
     dg.DataGenerator(spark, name="products", rows=len(product_names), partitions=1)
-    .withColumn("product_id", StringType(), template=r"PROD\d\d\d\d")
+    .withColumn("product_id", StringType(),
+                expr="concat('PROD', lpad(cast(cast(floor(rand()*10000) as int) as string), 4, '0'))")
     .withColumn("product_name", StringType(), values=product_names)
     .withColumn("product_category", StringType(), values=categories_map)
     .withColumn("interest_rate_pct", FloatType(), minValue=0.01, maxValue=5.5, percentNulls=0.4)
@@ -162,8 +165,7 @@ product_gen = (
     .withColumn("launch_date", DateType(),
                 expr="date_add(to_date('2010-01-01'), cast(rand()*5000 as int))")
     .withColumn("status", StringType(),
-                values=["Active", "Discontinued", "Limited"],
-                weights=[0.85, 0.10, 0.05])
+                values=["Active", "Discontinued", "Limited"])
 )
 
 products_df = product_gen.build()
@@ -262,35 +264,38 @@ streets = [
 
 customer_gen = (
     dg.DataGenerator(spark, name="customers", rows=50000, partitions=8)
-    .withColumn("customer_id", StringType(), template=r"CUST\d\d\d\d\d\d\d\d")
+    .withColumn("customer_id", StringType(),
+                expr="concat('CUST', lpad(cast(cast(floor(rand()*100000000) as bigint) as string), 8, '0'))")
     .withColumn("first_name", StringType(), values=first_names)
     .withColumn("last_name", StringType(), values=last_names)
-    .withColumn("email", StringType(), template=r"\w+.\w+\d\d\d@\w+.com")
-    .withColumn("phone", StringType(), template=r"+1 \d\d\d-\d\d\d-\d\d\d\d")
+    .withColumn("email", StringType(),
+                expr="concat(lower(first_name), '.', lower(last_name), cast(cast(floor(rand()*900+100) as int) as string), '@example.com')")
+    .withColumn("phone", StringType(),
+                expr="concat('+1 ', lpad(cast(cast(floor(rand()*900+100) as int) as string),3,'0'), '-', lpad(cast(cast(floor(rand()*900+100) as int) as string),3,'0'), '-', lpad(cast(cast(floor(rand()*10000) as int) as string),4,'0'))")
     .withColumn("date_of_birth", DateType(),
                 expr="date_add(to_date('1940-01-01'), cast(rand()*24000 as int))")
     .withColumn("gender", StringType(), values=["M", "F"])
-    .withColumn("street_address", StringType(), template=r"\d\d\d \w+ Street")
+    .withColumn("street_address", StringType(),
+                expr="concat(cast(cast(floor(rand()*9900+100) as int) as string), ' ', element_at(array('Main','Oak','Pine','Maple','Cedar','Elm','Washington','Lake','Hill','Park'), cast(floor(rand()*10)+1 as int)), ' Street')")
     .withColumn("city", StringType(), values=customer_cities)
-    .withColumn("postal_code", StringType(), template=r"\d\d\d\d\d")
+    .withColumn("postal_code", StringType(),
+                expr="lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0')")
     .withColumn("country", StringType(), values=["United States"])
     .withColumn("customer_segment", StringType(),
-                values=["Mass Market", "Mass Affluent", "High Net Worth", "Ultra High Net Worth", "Small Business"],
-                weights=[0.60, 0.25, 0.10, 0.03, 0.02])
+                values=["Mass Market", "Mass Affluent", "High Net Worth", "Ultra High Net Worth", "Small Business"])
     .withColumn("credit_score", IntegerType(), minValue=550, maxValue=850)
     .withColumn("annual_income", DoubleType(), minValue=20000.0, maxValue=500000.0)
     .withColumn("employment_status", StringType(),
-                values=["Employed", "Self-Employed", "Retired", "Student", "Unemployed"],
-                weights=[0.65, 0.15, 0.12, 0.05, 0.03])
-    .withColumn("primary_branch_id", StringType(), template=r"BR\d\d\d\d\d")
+                values=["Employed", "Self-Employed", "Retired", "Student", "Unemployed"])
+    .withColumn("primary_branch_id", StringType(),
+                expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))")
     .withColumn("customer_since", DateType(),
                 expr="date_add(to_date('2005-01-01'), cast(rand()*7000 as int))")
-    .withColumn("kyc_verified", StringType(), values=["Y", "N"], weights=[0.95, 0.05])
+    .withColumn("kyc_verified", StringType(), values=["Y", "N"])
     .withColumn("marketing_consent", StringType(), values=["Y", "N"])
-    .withColumn("digital_banking_enrolled", StringType(), values=["Y", "N"], weights=[0.85, 0.15])
+    .withColumn("digital_banking_enrolled", StringType(), values=["Y", "N"])
     .withColumn("status", StringType(),
-                values=["Active", "Inactive", "Dormant", "Closed"],
-                weights=[0.85, 0.08, 0.05, 0.02])
+                values=["Active", "Inactive", "Dormant", "Closed"])
 )
 
 customers_df = customer_gen.build()
@@ -312,13 +317,16 @@ customers_df.show(5, truncate=False)
 
 account_gen = (
     dg.DataGenerator(spark, name="accounts", rows=75000, partitions=8)
-    .withColumn("account_id", StringType(), template=r"ACC\d\d\d\d\d\d\d\d\d\d")
-    .withColumn("account_number", StringType(), template=r"\d\d\d\d\d\d\d\d\d\d\d\d")
-    .withColumn("customer_id", StringType(), template=r"CUST\d\d\d\d\d\d\d\d")
-    .withColumn("product_id", StringType(), template=r"PROD\d\d\d\d")
+    .withColumn("account_id", StringType(),
+                expr="concat('ACC', lpad(cast(cast(floor(rand()*10000000000) as bigint) as string), 10, '0'))")
+    .withColumn("account_number", StringType(),
+                expr="lpad(cast(cast(floor(rand()*1000000000000) as bigint) as string), 12, '0')")
+    .withColumn("customer_id", StringType(),
+                expr="concat('CUST', lpad(cast(cast(floor(rand()*100000000) as bigint) as string), 8, '0'))")
+    .withColumn("product_id", StringType(),
+                expr="concat('PROD', lpad(cast(cast(floor(rand()*10000) as int) as string), 4, '0'))")
     .withColumn("account_type", StringType(),
-                values=["Checking", "Savings", "Credit Card", "Investment"],
-                weights=[0.35, 0.30, 0.20, 0.15])
+                values=["Checking", "Savings", "Credit Card", "Investment"])
     .withColumn("currency", StringType(), values=["USD"])
     .withColumn("current_balance", DoubleType(), minValue=-500.0, maxValue=500000.0)
     .withColumn("available_balance", DoubleType(), minValue=0.0, maxValue=500000.0)
@@ -329,13 +337,13 @@ account_gen = (
                 expr="date_add(to_date('2010-01-01'), cast(rand()*5400 as int))")
     .withColumn("last_activity_date", DateType(),
                 expr="date_add(to_date('2023-01-01'), cast(rand()*900 as int))")
-    .withColumn("branch_id", StringType(), template=r"BR\d\d\d\d\d")
-    .withColumn("is_primary", StringType(), values=["Y", "N"], weights=[0.3, 0.7])
+    .withColumn("branch_id", StringType(),
+                expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))")
+    .withColumn("is_primary", StringType(), values=["Y", "N"])
     .withColumn("overdraft_protection", StringType(), values=["Y", "N"], percentNulls=0.5)
-    .withColumn("paperless_statements", StringType(), values=["Y", "N"], weights=[0.75, 0.25])
+    .withColumn("paperless_statements", StringType(), values=["Y", "N"])
     .withColumn("status", StringType(),
-                values=["Active", "Dormant", "Frozen", "Closed"],
-                weights=[0.88, 0.06, 0.02, 0.04])
+                values=["Active", "Dormant", "Frozen", "Closed"])
 )
 
 accounts_df = account_gen.build()
@@ -359,8 +367,10 @@ merchants = [
 
 txn_gen = (
     dg.DataGenerator(spark, name="transactions", rows=500000, partitions=16)
-    .withColumn("transaction_id", StringType(), template=r"TXN\d\d\d\d\d\d\d\d\d\d\d\d")
-    .withColumn("account_id", StringType(), template=r"ACC\d\d\d\d\d\d\d\d\d\d")
+    .withColumn("transaction_id", StringType(),
+                expr="concat('TXN', lpad(cast(cast(floor(rand()*1000000000000) as bigint) as string), 12, '0'))")
+    .withColumn("account_id", StringType(),
+                expr="concat('ACC', lpad(cast(cast(floor(rand()*10000000000) as bigint) as string), 10, '0'))")
     .withColumn("transaction_date", DateType(),
                 expr="date_add(to_date('2023-01-01'), cast(rand()*1095 as int))")
     .withColumn("transaction_time", StringType(),
@@ -371,30 +381,29 @@ txn_gen = (
                     "Bill Payment", "Direct Debit", "Card Payment",
                     "ATM Withdrawal", "Salary Credit", "Refund",
                     "Purchase", "Interest Credit", "Fee",
-                ],
-                weights=[0.08, 0.06, 0.05, 0.05, 0.10, 0.08, 0.20, 0.05, 0.08, 0.03, 0.12, 0.05, 0.05])
+                ])
     .withColumn("amount", DoubleType(), minValue=1.0, maxValue=10000.0)
     .withColumn("currency", StringType(), values=["USD"])
-    .withColumn("is_credit", StringType(), values=["Y", "N"], weights=[0.35, 0.65])
+    .withColumn("is_credit", StringType(), values=["Y", "N"])
     .withColumn("running_balance", DoubleType(), minValue=-1000.0, maxValue=100000.0)
     .withColumn("merchant_name", StringType(), values=merchants, percentNulls=0.4)
     .withColumn("merchant_category_code", StringType(),
                 values=["5411", "5942", "5732", "4899", "5812", "5814", "4121", "5541", "5200", "4814"],
                 percentNulls=0.4)
     .withColumn("channel", StringType(),
-                values=["Online Banking", "Mobile App", "ATM", "Branch", "Phone Banking", "Direct Debit"],
-                weights=[0.35, 0.30, 0.10, 0.08, 0.02, 0.15])
-    .withColumn("branch_id", StringType(), template=r"BR\d\d\d\d\d", percentNulls=0.8)
-    .withColumn("reference_number", StringType(), template=r"\w\w\w\w\w\w\w\w\w\w\w\w\w\w\w\w")
-    .withColumn("counterparty_account", StringType(), template=r"****\d\d\d\d", percentNulls=0.8)
-    .withColumn("is_recurring", StringType(), values=["Y", "N"], weights=[0.15, 0.85])
-    .withColumn("is_international", StringType(), values=["Y", "N"], weights=[0.05, 0.95])
+                values=["Online Banking", "Mobile App", "ATM", "Branch", "Phone Banking", "Direct Debit"])
+    .withColumn("branch_id", StringType(),
+                expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))", percentNulls=0.8)
+    .withColumn("reference_number", StringType(),
+                expr="upper(substr(sha2(cast(rand() as string), 256), 1, 16))")
+    .withColumn("counterparty_account", StringType(),
+                expr="concat('****', lpad(cast(cast(floor(rand()*10000) as int) as string), 4, '0'))", percentNulls=0.8)
+    .withColumn("is_recurring", StringType(), values=["Y", "N"])
+    .withColumn("is_international", StringType(), values=["Y", "N"])
     .withColumn("fraud_flag", StringType(),
-                values=["N", "Suspected", "Confirmed"],
-                weights=[0.997, 0.002, 0.001])
+                values=["N", "Suspected", "Confirmed"])
     .withColumn("status", StringType(),
-                values=["Completed", "Pending", "Failed", "Reversed"],
-                weights=[0.96, 0.02, 0.01, 0.01])
+                values=["Completed", "Pending", "Failed", "Reversed"])
 )
 
 transactions_df = txn_gen.build()
