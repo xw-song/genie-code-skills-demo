@@ -142,19 +142,33 @@ FROM LIVE.silver_customers
 GROUP BY region, income_tier, credit_tier;
 ```
 
-## Unity Catalog Column Masking (post-deploy)
+## Unity Catalog Dynamic Column Masking (inline)
 
-For dynamic masking based on user permissions, create a masking function and apply it with `ALTER TABLE ... SET MASK`. Both are **post-deploy** operations -- run them once in a SQL notebook or the Catalog UI after the table exists. `ALTER TABLE ... SET MASK` is not valid inside SDP pipeline source; inside the pipeline, mask or derive PII in the `SELECT` (e.g. `email_hash`, `phone_masked`) as shown above.
+For permission-based dynamic masking, apply a Unity Catalog column-mask function **inline in the CREATE statement** using the `MASK` clause. This works inside SDP pipelines -- unlike `ALTER TABLE ... ALTER COLUMN ... SET MASK`, which is an imperative post-deploy operation and is NOT valid in pipeline source.
+
+**One-time prerequisite (outside the pipeline):** SDP pipelines cannot create functions, so register the mask UDF once via a SQL notebook, the Catalog UI, or a setup script before the pipeline runs:
 
 ```sql
--- Run POST-DEPLOY (SQL notebook / Catalog UI), NOT in the pipeline:
-CREATE OR REPLACE FUNCTION mask_email(email STRING)
+CREATE OR REPLACE FUNCTION <catalog>.<schema>.mask_email(email STRING)
 RETURNS STRING
 RETURN CASE
-  WHEN is_member('pii_full_access') THEN email
+  WHEN is_member('pii_full_access')    THEN email
   WHEN is_member('pii_partial_access') THEN CONCAT(SUBSTR(email, 1, 3), '***@', SPLIT_PART(email, '@', 2))
   ELSE '***@***'
 END;
-
-ALTER TABLE silver_customers ALTER COLUMN email SET MASK mask_email;
 ```
+
+**Apply it inline** in the pipeline table's column list (no `ALTER TABLE`):
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW silver_customers (
+  customer_id COMMENT 'Unique customer identifier from CRM',
+  email STRING MASK <catalog>.<schema>.mask_email,   -- dynamic UC mask, [PII: EMAIL - HIGH]
+  audit_timestamp COMMENT 'Pipeline execution timestamp'
+)
+COMMENT "Cleaned customer data - CONTAINS PII: email"
+TBLPROPERTIES ("quality" = "silver", "data_owner" = "data-engineering", "domain" = "customer", "contains_pii" = "true", "pii_columns" = "email")
+AS SELECT customer_id, email, current_timestamp() AS audit_timestamp FROM LIVE.bronze_customers;
+```
+
+Queries then receive the mask function's output (e.g. `***@***`) unless the caller is in a privileged group. Combine both techniques: use the in-`SELECT` transforms above (`email_hash`, `phone_masked`, tiers) for static de-identification, and the inline `MASK` clause when you also need dynamic, permission-based redaction.

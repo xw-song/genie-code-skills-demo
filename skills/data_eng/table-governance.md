@@ -96,17 +96,11 @@ Tables containing personal data require additional governance:
 1. **TBLPROPERTIES** must include `"contains_pii" = "true"` and `"pii_columns"` listing all PII column names
 2. **COMMENT** must include `CONTAINS PII: <column_list>`
 3. **Column descriptions** for PII columns must note the PII type and risk level
-4. **Unity Catalog tags** are applied **after deployment**, not in pipeline source. `ALTER TABLE ... SET TAGS` is not valid inside an SDP pipeline; run it once in a SQL notebook or the Catalog UI after the table exists:
+4. **Governance metadata is captured inline via TBLPROPERTIES** (`contains_pii`, `pii_columns`, plus `quality` / `domain` / `data_owner`). The equivalent Unity Catalog **tags** are applied by governance automation *outside* the pipeline -- `ALTER TABLE ... SET TAGS` is not valid in pipeline source, so do NOT emit it in pipeline files. Within the pipeline, rely on TBLPROPERTIES for this metadata.
 
-```sql
--- Run POST-DEPLOY (SQL notebook / Catalog UI), NOT in the pipeline:
-ALTER TABLE <catalog>.<schema>.bronze_customers
-  SET TAGS ('pii' = 'true', 'data_classification' = 'confidential');
-```
+## Unity Catalog Tags (applied outside the pipeline)
 
-## Unity Catalog Tags
-
-Use tags for discoverability and governance automation:
+Tags provide discoverability and governance automation. They are applied **after** the pipeline creates the table -- by governance automation, a SQL notebook, or a CI step (`ALTER TABLE ... SET TAGS`) -- and are never emitted in pipeline source. Within the pipeline, capture the same metadata in TBLPROPERTIES (above). Reference tag set:
 
 | Tag | Values | Purpose |
 |-----|--------|---------|
