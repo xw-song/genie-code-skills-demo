@@ -142,11 +142,12 @@ FROM LIVE.silver_customers
 GROUP BY region, income_tier, credit_tier;
 ```
 
-## Unity Catalog Column Masking
+## Unity Catalog Column Masking (post-deploy)
 
-For dynamic masking based on user permissions, create masking functions:
+For dynamic masking based on user permissions, create a masking function and apply it with `ALTER TABLE ... SET MASK`. Both are **post-deploy** operations -- run them once in a SQL notebook or the Catalog UI after the table exists. `ALTER TABLE ... SET MASK` is not valid inside SDP pipeline source; inside the pipeline, mask or derive PII in the `SELECT` (e.g. `email_hash`, `phone_masked`) as shown above.
 
 ```sql
+-- Run POST-DEPLOY (SQL notebook / Catalog UI), NOT in the pipeline:
 CREATE OR REPLACE FUNCTION mask_email(email STRING)
 RETURNS STRING
 RETURN CASE

@@ -30,10 +30,12 @@ Every table MUST have `TBLPROPERTIES` with at minimum:
 ```sql
 TBLPROPERTIES (
   "quality" = "<bronze|silver|gold>",
-  "owner" = "<team-or-domain>",
+  "data_owner" = "<team-or-domain>",
   "domain" = "<business-domain>"
 )
 ```
+
+> Note: use `data_owner`, not `owner`. `owner` is a reserved Databricks table property and is rejected inside `TBLPROPERTIES`.
 
 Additional required properties by context:
 
@@ -46,18 +48,22 @@ Additional required properties by context:
 
 ## Column-Level Documentation
 
-### Column Descriptions via ALTER TABLE
+### Column Descriptions (inline in the CREATE)
 
-After creating a table, add column descriptions for key columns using `ALTER TABLE`:
+In SDP pipelines, add column descriptions **inline in the table's column list** inside the `CREATE OR REFRESH ...` statement. Do NOT use `ALTER TABLE ... ALTER COLUMN ... COMMENT` -- imperative `ALTER TABLE` is not allowed in pipeline source files. List the columns in the same order as the `SELECT` and attach a `COMMENT` to each documented column:
 
 ```sql
-ALTER TABLE <catalog>.<schema>.silver_customers
-  ALTER COLUMN customer_id COMMENT 'Unique customer identifier from source system',
-  ALTER COLUMN income_tier COMMENT 'Derived income bracket: High Income / Upper Middle / Middle / Lower Middle',
-  ALTER COLUMN email_hash COMMENT 'SHA-256 hash of lowercase trimmed email for matching without PII exposure',
-  ALTER COLUMN data_quality_flag COMMENT 'Row-level DQ status: CLEAN, MISSING_<field>, or NEGATIVE_<field>',
-  ALTER COLUMN audit_timestamp COMMENT 'Pipeline execution timestamp',
-  ALTER COLUMN source_system COMMENT 'Upstream source system identifier';
+CREATE OR REFRESH MATERIALIZED VIEW silver_customers (
+  customer_id        COMMENT 'Unique customer identifier from source system',
+  income_tier        COMMENT 'Derived income bracket: High Income / Upper Middle / Middle / Lower Middle',
+  email_hash         COMMENT 'SHA-256 hash of lowercase trimmed email for matching without PII exposure',
+  data_quality_flag  COMMENT 'Row-level DQ status: CLEAN, MISSING_<field>, or NEGATIVE_<field>',
+  audit_timestamp    COMMENT 'Pipeline execution timestamp',
+  source_system      COMMENT 'Upstream source system identifier'
+)
+COMMENT "..."
+TBLPROPERTIES (...)
+AS SELECT ...;
 ```
 
 ### Which Columns Need Descriptions
@@ -90,9 +96,10 @@ Tables containing personal data require additional governance:
 1. **TBLPROPERTIES** must include `"contains_pii" = "true"` and `"pii_columns"` listing all PII column names
 2. **COMMENT** must include `CONTAINS PII: <column_list>`
 3. **Column descriptions** for PII columns must note the PII type and risk level
-4. **Unity Catalog tags** should be applied where supported:
+4. **Unity Catalog tags** are applied **after deployment**, not in pipeline source. `ALTER TABLE ... SET TAGS` is not valid inside an SDP pipeline; run it once in a SQL notebook or the Catalog UI after the table exists:
 
 ```sql
+-- Run POST-DEPLOY (SQL notebook / Catalog UI), NOT in the pipeline:
 ALTER TABLE <catalog>.<schema>.bronze_customers
   SET TAGS ('pii' = 'true', 'data_classification' = 'confidential');
 ```
@@ -115,23 +122,33 @@ Use tags for discoverability and governance automation:
 Before completing any table definition, verify ALL of the following:
 
 - [ ] `COMMENT` clause is present and descriptive
-- [ ] `TBLPROPERTIES` includes at least `quality` and `owner`
+- [ ] `TBLPROPERTIES` includes at least `quality` and `data_owner`
 - [ ] If PII is present: `contains_pii` and `pii_columns` are in TBLPROPERTIES
 - [ ] If PII is present: COMMENT mentions `CONTAINS PII`
-- [ ] Column descriptions added for primary keys, derived columns, and PII columns
-- [ ] Unity Catalog tags applied (`quality`, `domain`, `pii`, `data_classification`)
+- [ ] Column descriptions added inline (in the CREATE column list) for primary keys, derived columns, and PII columns
+- [ ] Unity Catalog tags applied post-deploy (`quality`, `domain`, `pii`, `data_classification`)
 - [ ] `audit_timestamp` and `source_system` are the last two columns
 
 ## Example: Full Governance Application
 
 ```sql
-CREATE OR REFRESH MATERIALIZED VIEW silver_customers(
+CREATE OR REFRESH MATERIALIZED VIEW silver_customers (
+  customer_id        COMMENT 'Unique customer identifier from CRM',
+  region,
+  customer_segment,
+  email_hash         COMMENT 'SHA-256 hash of lowercase trimmed email for matching without PII exposure',
+  phone_masked       COMMENT 'Last 4 digits of phone number, masked for PII protection',
+  age                COMMENT 'Derived age in years from date_of_birth',
+  income_tier        COMMENT 'Derived income bracket: High Income / Upper Middle / Middle / Lower Middle',
+  data_quality_flag  COMMENT 'Row-level DQ status: CLEAN or MISSING_CUSTOMER_ID',
+  audit_timestamp    COMMENT 'Pipeline execution timestamp',
+  source_system      COMMENT 'Upstream source system identifier',
   CONSTRAINT valid_customer_id EXPECT (customer_id IS NOT NULL) ON VIOLATION FAIL UPDATE
 )
 COMMENT "Cleaned customer data with derived tiers from bronze_customers - CONTAINS PII: email_hash, phone_masked, age"
 TBLPROPERTIES (
   "quality" = "silver",
-  "owner" = "data-engineering",
+  "data_owner" = "data-engineering",
   "domain" = "customer",
   "contains_pii" = "true",
   "pii_columns" = "email_hash,phone_masked,age",
@@ -158,14 +175,7 @@ AS SELECT
   'crm_system' AS source_system
 FROM LIVE.bronze_customers;
 
-ALTER TABLE silver_customers
-  ALTER COLUMN customer_id COMMENT 'Unique customer identifier from CRM',
-  ALTER COLUMN email_hash COMMENT 'SHA-256 hash of lowercase trimmed email for matching without PII exposure',
-  ALTER COLUMN phone_masked COMMENT 'Last 4 digits of phone number, masked for PII protection',
-  ALTER COLUMN age COMMENT 'Derived age in years from date_of_birth',
-  ALTER COLUMN income_tier COMMENT 'Derived income bracket: High Income / Upper Middle / Middle / Lower Middle',
-  ALTER COLUMN data_quality_flag COMMENT 'Row-level DQ status: CLEAN or MISSING_CUSTOMER_ID';
-
-ALTER TABLE silver_customers
-  SET TAGS ('pii' = 'true', 'data_classification' = 'confidential', 'domain' = 'customer');
+-- UC tags are applied POST-DEPLOY (not valid in pipeline source):
+-- ALTER TABLE silver_customers
+--   SET TAGS ('pii' = 'true', 'data_classification' = 'confidential', 'domain' = 'customer');
 ```
