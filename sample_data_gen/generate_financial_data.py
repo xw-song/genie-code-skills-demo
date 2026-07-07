@@ -96,7 +96,7 @@ branch_gen = (
                 expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))")
     .withColumn("branch_name", StringType(), values=branch_suffixes)
     .withColumn("branch_type", StringType(),
-                values=["Full Service", "Express", "Digital Hub", "Business Center", "Premium"])
+                expr="CASE WHEN pmod(hash(id,'branch_type'),1000) < 400 THEN 'Full Service' WHEN pmod(hash(id,'branch_type'),1000) < 650 THEN 'Express' WHEN pmod(hash(id,'branch_type'),1000) < 800 THEN 'Digital Hub' WHEN pmod(hash(id,'branch_type'),1000) < 900 THEN 'Business Center' ELSE 'Premium' END")
     .withColumn("city", StringType(), values=cities)
     .withColumn("region", StringType(),
                 values=["North", "South", "East", "West", "Central", "Metro", "Pacific", "Mountain", "Midwest"])
@@ -114,7 +114,7 @@ branch_gen = (
     .withColumn("has_safe_deposit", StringType(), values=["Y", "N"])
     .withColumn("has_business_services", StringType(), values=["Y", "N"])
     .withColumn("status", StringType(),
-                values=["Active", "Inactive", "Renovation"])
+                expr="CASE WHEN pmod(hash(id,'status'),1000) < 950 THEN 'Active' WHEN pmod(hash(id,'status'),1000) < 980 THEN 'Inactive' ELSE 'Renovation' END")
 )
 
 branches_df = branch_gen.build()
@@ -165,7 +165,7 @@ product_gen = (
     .withColumn("launch_date", DateType(),
                 expr="date_add(to_date('2010-01-01'), cast(rand()*5000 as int))")
     .withColumn("status", StringType(),
-                values=["Active", "Discontinued", "Limited"])
+                expr="CASE WHEN pmod(hash(id,'status'),1000) < 850 THEN 'Active' WHEN pmod(hash(id,'status'),1000) < 950 THEN 'Discontinued' ELSE 'Limited' END")
 )
 
 products_df = product_gen.build()
@@ -282,20 +282,20 @@ customer_gen = (
                 expr="lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0')")
     .withColumn("country", StringType(), values=["United States"])
     .withColumn("customer_segment", StringType(),
-                values=["Mass Market", "Mass Affluent", "High Net Worth", "Ultra High Net Worth", "Small Business"])
+                expr="CASE WHEN pmod(hash(id,'seg'),1000) < 600 THEN 'Mass Market' WHEN pmod(hash(id,'seg'),1000) < 850 THEN 'Mass Affluent' WHEN pmod(hash(id,'seg'),1000) < 950 THEN 'High Net Worth' WHEN pmod(hash(id,'seg'),1000) < 980 THEN 'Ultra High Net Worth' ELSE 'Small Business' END")
     .withColumn("credit_score", IntegerType(), minValue=550, maxValue=850)
     .withColumn("annual_income", DoubleType(), minValue=20000.0, maxValue=500000.0)
     .withColumn("employment_status", StringType(),
-                values=["Employed", "Self-Employed", "Retired", "Student", "Unemployed"])
+                expr="CASE WHEN pmod(hash(id,'emp'),1000) < 650 THEN 'Employed' WHEN pmod(hash(id,'emp'),1000) < 800 THEN 'Self-Employed' WHEN pmod(hash(id,'emp'),1000) < 920 THEN 'Retired' WHEN pmod(hash(id,'emp'),1000) < 970 THEN 'Student' ELSE 'Unemployed' END")
     .withColumn("primary_branch_id", StringType(),
                 expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))")
     .withColumn("customer_since", DateType(),
                 expr="date_add(to_date('2005-01-01'), cast(rand()*7000 as int))")
-    .withColumn("kyc_verified", StringType(), values=["Y", "N"])
+    .withColumn("kyc_verified", StringType(), expr="CASE WHEN rand() < 0.95 THEN 'Y' ELSE 'N' END")
     .withColumn("marketing_consent", StringType(), values=["Y", "N"])
-    .withColumn("digital_banking_enrolled", StringType(), values=["Y", "N"])
+    .withColumn("digital_banking_enrolled", StringType(), expr="CASE WHEN rand() < 0.85 THEN 'Y' ELSE 'N' END")
     .withColumn("status", StringType(),
-                values=["Active", "Inactive", "Dormant", "Closed"])
+                expr="CASE WHEN pmod(hash(id,'cust_status'),1000) < 850 THEN 'Active' WHEN pmod(hash(id,'cust_status'),1000) < 930 THEN 'Inactive' WHEN pmod(hash(id,'cust_status'),1000) < 980 THEN 'Dormant' ELSE 'Closed' END")
 )
 
 customers_df = customer_gen.build()
@@ -326,7 +326,7 @@ account_gen = (
     .withColumn("product_id", StringType(),
                 expr="concat('PROD', lpad(cast(cast(floor(rand()*10000) as int) as string), 4, '0'))")
     .withColumn("account_type", StringType(),
-                values=["Checking", "Savings", "Credit Card", "Investment"])
+                expr="CASE WHEN pmod(hash(id,'acct_type'),1000) < 350 THEN 'Checking' WHEN pmod(hash(id,'acct_type'),1000) < 650 THEN 'Savings' WHEN pmod(hash(id,'acct_type'),1000) < 850 THEN 'Credit Card' ELSE 'Investment' END")
     .withColumn("currency", StringType(), values=["USD"])
     .withColumn("current_balance", DoubleType(), minValue=-500.0, maxValue=500000.0)
     .withColumn("available_balance", DoubleType(), minValue=0.0, maxValue=500000.0)
@@ -339,11 +339,11 @@ account_gen = (
                 expr="date_add(to_date('2023-01-01'), cast(rand()*900 as int))")
     .withColumn("branch_id", StringType(),
                 expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))")
-    .withColumn("is_primary", StringType(), values=["Y", "N"])
+    .withColumn("is_primary", StringType(), expr="CASE WHEN rand() < 0.30 THEN 'Y' ELSE 'N' END")
     .withColumn("overdraft_protection", StringType(), values=["Y", "N"], percentNulls=0.5)
-    .withColumn("paperless_statements", StringType(), values=["Y", "N"])
+    .withColumn("paperless_statements", StringType(), expr="CASE WHEN rand() < 0.75 THEN 'Y' ELSE 'N' END")
     .withColumn("status", StringType(),
-                values=["Active", "Dormant", "Frozen", "Closed"])
+                expr="CASE WHEN pmod(hash(id,'acct_status'),1000) < 880 THEN 'Active' WHEN pmod(hash(id,'acct_status'),1000) < 940 THEN 'Dormant' WHEN pmod(hash(id,'acct_status'),1000) < 960 THEN 'Frozen' ELSE 'Closed' END")
 )
 
 accounts_df = account_gen.build()
@@ -376,34 +376,29 @@ txn_gen = (
     .withColumn("transaction_time", StringType(),
                 expr="concat(lpad(cast(cast(rand()*24 as int) as string),2,'0'),':',lpad(cast(cast(rand()*60 as int) as string),2,'0'),':',lpad(cast(cast(rand()*60 as int) as string),2,'0'))")
     .withColumn("transaction_type", StringType(),
-                values=[
-                    "Deposit", "Withdrawal", "Transfer Out", "Transfer In",
-                    "Bill Payment", "Direct Debit", "Card Payment",
-                    "ATM Withdrawal", "Salary Credit", "Refund",
-                    "Purchase", "Interest Credit", "Fee",
-                ])
+                expr="CASE WHEN pmod(hash(id,'txn_type'),1000) < 80 THEN 'Deposit' WHEN pmod(hash(id,'txn_type'),1000) < 140 THEN 'Withdrawal' WHEN pmod(hash(id,'txn_type'),1000) < 190 THEN 'Transfer Out' WHEN pmod(hash(id,'txn_type'),1000) < 240 THEN 'Transfer In' WHEN pmod(hash(id,'txn_type'),1000) < 340 THEN 'Bill Payment' WHEN pmod(hash(id,'txn_type'),1000) < 420 THEN 'Direct Debit' WHEN pmod(hash(id,'txn_type'),1000) < 620 THEN 'Card Payment' WHEN pmod(hash(id,'txn_type'),1000) < 670 THEN 'ATM Withdrawal' WHEN pmod(hash(id,'txn_type'),1000) < 750 THEN 'Salary Credit' WHEN pmod(hash(id,'txn_type'),1000) < 780 THEN 'Refund' WHEN pmod(hash(id,'txn_type'),1000) < 900 THEN 'Purchase' WHEN pmod(hash(id,'txn_type'),1000) < 950 THEN 'Interest Credit' ELSE 'Fee' END")
     .withColumn("amount", DoubleType(), minValue=1.0, maxValue=10000.0)
     .withColumn("currency", StringType(), values=["USD"])
-    .withColumn("is_credit", StringType(), values=["Y", "N"])
+    .withColumn("is_credit", StringType(), expr="CASE WHEN rand() < 0.35 THEN 'Y' ELSE 'N' END")
     .withColumn("running_balance", DoubleType(), minValue=-1000.0, maxValue=100000.0)
     .withColumn("merchant_name", StringType(), values=merchants, percentNulls=0.4)
     .withColumn("merchant_category_code", StringType(),
                 values=["5411", "5942", "5732", "4899", "5812", "5814", "4121", "5541", "5200", "4814"],
                 percentNulls=0.4)
     .withColumn("channel", StringType(),
-                values=["Online Banking", "Mobile App", "ATM", "Branch", "Phone Banking", "Direct Debit"])
+                expr="CASE WHEN pmod(hash(id,'channel'),1000) < 350 THEN 'Online Banking' WHEN pmod(hash(id,'channel'),1000) < 650 THEN 'Mobile App' WHEN pmod(hash(id,'channel'),1000) < 750 THEN 'ATM' WHEN pmod(hash(id,'channel'),1000) < 830 THEN 'Branch' WHEN pmod(hash(id,'channel'),1000) < 850 THEN 'Phone Banking' ELSE 'Direct Debit' END")
     .withColumn("branch_id", StringType(),
                 expr="concat('BR', lpad(cast(cast(floor(rand()*100000) as int) as string), 5, '0'))", percentNulls=0.8)
     .withColumn("reference_number", StringType(),
                 expr="upper(substr(sha2(cast(rand() as string), 256), 1, 16))")
     .withColumn("counterparty_account", StringType(),
                 expr="concat('****', lpad(cast(cast(floor(rand()*10000) as int) as string), 4, '0'))", percentNulls=0.8)
-    .withColumn("is_recurring", StringType(), values=["Y", "N"])
-    .withColumn("is_international", StringType(), values=["Y", "N"])
+    .withColumn("is_recurring", StringType(), expr="CASE WHEN rand() < 0.15 THEN 'Y' ELSE 'N' END")
+    .withColumn("is_international", StringType(), expr="CASE WHEN rand() < 0.05 THEN 'Y' ELSE 'N' END")
     .withColumn("fraud_flag", StringType(),
-                values=["N", "Suspected", "Confirmed"])
+                expr="CASE WHEN pmod(hash(id,'fraud'),1000) < 997 THEN 'N' WHEN pmod(hash(id,'fraud'),1000) < 999 THEN 'Suspected' ELSE 'Confirmed' END")
     .withColumn("status", StringType(),
-                values=["Completed", "Pending", "Failed", "Reversed"])
+                expr="CASE WHEN pmod(hash(id,'txn_status'),1000) < 960 THEN 'Completed' WHEN pmod(hash(id,'txn_status'),1000) < 980 THEN 'Pending' WHEN pmod(hash(id,'txn_status'),1000) < 990 THEN 'Failed' ELSE 'Reversed' END")
 )
 
 transactions_df = txn_gen.build()
